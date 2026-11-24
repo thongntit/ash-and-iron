@@ -8,10 +8,11 @@ async function start(page, className = 'Warden') {
   await page.getByRole('button', { name: new RegExp(className) }).click();
   await page.getByRole('button', { name: 'Enter Gloamwatch' }).click();
   await expect(page.getByRole('heading', { name: 'Gloamwatch' })).toBeVisible();
+  await expect(page.locator('#world')).toHaveAttribute('data-rendered-zone', 'watch', { timeout: 20_000 });
 }
 
 test('desktop controls, quest progression, and persisted chapter state', async ({ page }) => {
-  test.setTimeout(80_000);
+  test.setTimeout(105_000);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');
@@ -30,16 +31,10 @@ test('desktop controls, quest progression, and persisted chapter state', async (
   await expect(page.getByRole('dialog')).toContainText('A road of cinders');
   await page.keyboard.press('j');
 
-  // Take the right-hand road toward the gate, then click its newly visible arch.
-  await page.mouse.click(1270, 495);
-  await expect.poll(() => page.evaluate(() =>
-    JSON.parse(localStorage.getItem('ash-and-iron.v1')).position[0]), { timeout: 14_000 }).toBeGreaterThan(15);
-  const gate = await page.evaluate(() => {
-    const [x, y] = JSON.parse(localStorage.getItem('ash-and-iron.v1')).position;
-    return [720 + ((21 - x) - (7 - y)) * 49, 432 + ((21 - x) + (7 - y)) * 49 * 0.52 - 31];
-  });
-  await page.mouse.click(...gate);
-  await expect(page.getByRole('heading', { name: 'Cinderwood' })).toBeVisible({ timeout: 14_000 });
+  // The off-screen route marker leads to the gate around the new town buildings.
+  await page.getByRole('button', { name: 'To Cinderwood' }).click();
+  await expect(page.getByRole('heading', { name: 'Cinderwood' })).toBeVisible({ timeout: 32_000 });
+  await expect(page.locator('#world')).toHaveAttribute('data-rendered-zone', 'wood', { timeout: 20_000 });
 
   // Cast toward the first patrol and open the inventory to pause the game.
   await page.mouse.move(905, 490);

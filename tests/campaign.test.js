@@ -146,3 +146,75 @@ test('falling and restoring keep campaign progress and recover at Gloamwatch', (
   assert.equal(game.state.deaths, 1);
   assert.equal(readSave({ getItem: () => '{' }), null);
 });
+
+test('the ledger commission survives a save and pays out only once', () => {
+  const game = new Game('warden');
+  game.commission();
+  game.enter('wood');
+  const coffer = marker(game, 'ledger');
+  game.interact(coffer);
+  assert.equal(game.state.contract, 1);
+  const deserter = game.enemies.find(enemy => enemy.name === 'Cinderwood Deserter');
+  game.hurt(deserter, 1000);
+  game.interact(coffer);
+  assert.equal(game.state.contract, 2);
+  const resumed = new Game('warden', game.snapshot());
+  resumed.enter('watch');
+  const before = resumed.state.gold;
+  resumed.commission();
+  resumed.commission();
+  assert.equal(resumed.state.contract, 3);
+  assert.equal(resumed.state.gold, before + 55);
+  assert.ok(resumed.state.inventory.some(item => item.slot === 'weapon' && item.tier === 2));
+  const legacy = game.snapshot();
+  delete legacy.contract;
+  assert.equal(new Game('warden', legacy).state.contract, 0);
+});
+
+test('guard, blink, and snare have class-specific gameplay effects', () => {
+  const warden = new Game('warden');
+  warden.enter('wood');
+  const initialHP = warden.player.hp;
+  warden.utility(warden.player);
+  warden.takeHit(30);
+  assert.ok(warden.player.hp > initialHP - 16);
+  assert.ok(warden.player.guarded > warden.time);
+
+  const witch = new Game('witch');
+  witch.enter('wood');
+  const start = { ...witch.player };
+  witch.utility({ x: start.x + 3, y: start.y });
+  assert.ok(witch.player.x > start.x + 2);
+  assert.ok(witch.player.invuln > 0);
+  assert.ok(witch.effects.some(effect => effect.kind === 'burst'));
+
+  const scout = new Game('scout');
+  scout.enter('wood');
+  const target = scout.enemies[0];
+  scout.utility(target);
+  assert.equal(scout.traps.length, 1);
+  tick(scout, 0.025);
+  assert.equal(scout.traps.length, 0);
+  assert.ok(target.hp < target.maxHP && target.snared > scout.time);
+});
+
+test('Blackroot Vault can be reached and cleared without advancing the main quests', () => {
+  const game = new Game('witch');
+  game.state.stage = 1;
+  game.state.level = 3;
+  game.state.draughts = 6;
+  game.state.traits.might = 2;
+  game.enter('wood', [8, 23.6]);
+  playTo(game, 'vault', () => game.state.zone === 'vault');
+  assert.equal(game.state.stage, 1);
+  assert.ok(game.enemies.some(enemy => enemy.type === 'oathbreaker'));
+  game.interact(marker(game, 'vaultReward'));
+  assert.equal(game.state.vaultCleared, false);
+  playTo(game, 'vaultReward', () => game.state.vaultCleared);
+  assert.ok(game.state.gear.armor?.tier === 3 || game.state.inventory.some(item => item.slot === 'armor' && item.tier === 3));
+  const restored = new Game('witch', game.snapshot());
+  assert.equal(restored.state.vaultCleared, true);
+  assert.equal(marker(restored, 'vaultReward'), undefined);
+  playTo(restored, 'wood', () => restored.state.zone === 'wood');
+  assert.equal(restored.state.stage, 1);
+});

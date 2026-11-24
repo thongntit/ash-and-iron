@@ -1,0 +1,38 @@
+ASH & IRON THIRD-PARTY ASSETS
+
+All models, ground textures and recordings below were released under CC0 1.0.
+https://creativecommons.org/publicdomain/zero/1.0/
+
+KayKit adventurers, skeletons, dungeon pieces and medieval buildings
+Kay Lousberg
+https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0
+https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0
+https://github.com/KayKit-Game-Assets/KayKit-Dungeon-Remastered-1.0
+https://github.com/KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0
+
+Ultimate Stylized Nature
+Quaternius
+https://quaternius.com/packs/ultimatestylizednature.html
+https://github.com/agentkaerf/FreeModels/tree/main/Ultimate%20Stylized%20Nature%20-%20May%202022
+
+Cobblestone Floor 04 and Forest Floor
+Rob Tuytel / Poly Haven
+https://polyhaven.com/a/cobblestone_floor_04
+https://polyhaven.com/a/forest_floor
+https://polyhaven.com/license
+
+Whispers in the Fog
+Ruhinre
+https://opengameart.org/content/whispers-in-the-fog
+
+Dungeon Ambience
+yd
+https://opengameart.org/content/dungeon-ambience
+
+20 Sword Sound Effects (Attacks and Clashes)
+StarNinjas
+https://opengameart.org/content/20-sword-sound-effects-attacks-and-clashes
+
+The models were repacked as GLB files, and their animation library was trimmed
+and shared across compatible rigs. The trees use downscaled textures. Ground
+textures were converted to WebP, and the dungeon loop was re-encoded to Vorbis.

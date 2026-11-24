@@ -1,4 +1,5 @@
 import { ZONES } from './content.js';
+import { SET_PIECES } from './scenes.js';
 
 export function random(seed) {
   return () => {
@@ -26,15 +27,17 @@ export function createWorld(id) {
   const segments = zone.paths.flatMap(path => path.slice(1).map((point, i) => [path[i], point]));
   const tiles = [];
   const scenery = zone.props.map(([type, x, y]) => ({ type, x, y, seed: rnd() }));
+  const setPieces = SET_PIECES[id];
   const obstacles = scenery.filter(prop => ['house', 'wall', 'altar', 'bell'].includes(prop.type))
     .map(prop => ({ ...prop, radius: prop.type === 'house' ? 1.2 : 0.58 }));
+  obstacles.push(...setPieces.filter(prop => prop.solid).map(prop => ({ ...prop, radius: prop.solid })));
   for (let y = 0; y < zone.size; y++) for (let x = 0; x < zone.size; x++) {
     const d = Math.min(...segments.map(segment => segmentDistance(x, y, ...segment)));
     const seed = rnd();
     const road = d < (id === 'belfry' ? 3 : 1.65) || (zone.safe && length(x - 11, y - 11) < 4.5);
-    tiles.push({ x, y, road, seed, detail: rnd() });
+    tiles.push({ x, y, road, roadDistance: d, seed, detail: rnd() });
     const edge = Math.min(x, y, zone.size - 1 - x, zone.size - 1 - y);
-    const clear = d < 2.45 || [...zone.markers, ...zone.enemies, ...scenery.slice(0, zone.props.length)].some(point => distance({ x, y }, point) < 1.8);
+    const clear = d < 2.45 || [...zone.markers, ...zone.enemies, ...setPieces, ...scenery.slice(0, zone.props.length)].some(point => distance({ x, y }, point) < 1.8);
     if (clear) continue;
     if ((id === 'wood' || zone.safe) && (seed > 0.88 || (edge <= 1 && seed > 0.39))) {
       scenery.push({ type: seed > 0.94 ? 'pine' : 'tree', x, y, seed });
@@ -46,7 +49,7 @@ export function createWorld(id) {
       scenery.push({ type: 'debris', x, y, seed });
     }
   }
-  return { ...zone, id, tiles, scenery, obstacles };
+  return { ...zone, id, tiles, scenery, obstacles, setPieces };
 }
 
 export function walkable(world, x, y, radius = 0.22) {
@@ -75,7 +78,8 @@ export function findPath(world, actor, target) {
       const y = node.y + dy;
       const cost = node.g + length(dx, dy);
       const key = [x, y].join(',');
-      if (cost >= (seen.get(key) ?? Infinity) || !walkable(world, x, y)) continue;
+      if (cost >= (seen.get(key) ?? Infinity) || !walkable(world, x, y, 0.34)) continue;
+      if (![0.25, 0.5, 0.75].every(t => walkable(world, node.x + dx * t, node.y + dy * t, 0.26))) continue;
       if (dx && dy && (!walkable(world, node.x + dx, node.y) || !walkable(world, node.x, node.y + dy))) continue;
       seen.set(key, cost);
       nodes.push({ x, y, g: cost, f: cost + length(x - end[0], y - end[1]), previous: node });

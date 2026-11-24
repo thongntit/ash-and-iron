@@ -29,7 +29,7 @@
     </section>
     <footer class="title-footer">
       <span>ISOMETRIC ACTION RPG <b>◆</b> SINGLE PLAYER</span>
-      <span>ACT I <b>◆</b> v1.0</span>
+      <span>ACT I <b>◆</b> v1.1</span>
     </footer>
   </main>
   <main id="game-screen" class="game-screen" hidden>
@@ -51,7 +51,7 @@
       <canvas id="map" width="180" height="180"></canvas>
       <button id="toggle-map" class="text-button map-toggle" type="button" aria-label="Toggle area map"><kbd>M</kbd> Map</button>
     </aside>
-    <div id="boss-bar" class="boss-bar" hidden><div>The Bellworn <span id="boss-phase"></span></div><progress id="boss-hp" value="100" max="100" aria-label="The Bellworn health"></progress></div>
+    <div id="boss-bar" class="boss-bar" hidden><div><strong id="boss-name">The Bellworn</strong> <span id="boss-phase"></span></div><progress id="boss-hp" value="100" max="100" aria-label="The Bellworn health"></progress></div>
     <div id="zone-banner" class="zone-banner" aria-hidden="true"><div>◆</div><h2></h2><p></p></div>
     <div id="notifications" class="notifications" aria-live="polite"></div>
     <div id="interact-hint" class="interact-hint" hidden><kbd>E</kbd> <span></span></div>
@@ -64,6 +64,7 @@
           <div class="skills">
             <button id="primary" type="button" class="skill" aria-label="Primary attack"><span class="skill-icon"></span><kbd>LMB</kbd></button>
             <button id="art" type="button" class="skill" aria-label="Class skill"><span class="skill-icon">✹</span><kbd>Q</kbd></button>
+            <button id="utility" type="button" class="skill" aria-label="Tactical skill"><span class="skill-icon">✧</span><kbd>X</kbd></button>
             <button id="dodge" type="button" class="skill" aria-label="Dodge"><span class="skill-icon">↝</span><kbd>SPACE</kbd></button>
             <button id="heal" type="button" class="skill" aria-label="Use healing draught"><span class="skill-icon">✚</span><b id="draught-count"></b><kbd>R</kbd></button>
           </div>

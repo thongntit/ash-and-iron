@@ -1,26 +1,32 @@
 import * as T from 'three';
 import { beam, combineStatic, material, part } from './mesh.js';
 import { random } from './world.js';
+import { sceneAsset, sourceImage } from './assets.js';
 
 export const PALETTES = {
   watch: {
-    ground: [46, 51, 45], road: [92, 85, 69], fog: '#131d1e', stone: '#77766b',
-    dark: '#494b43', vegetation: '#58684b', foliage: ['#344f42', '#3d5d4c', '#4f6952'], flame: '#ffac56',
+    fog: '#131d1e', stone: '#77766b',
+    dark: '#494b43', vegetation: '#58684b', flame: '#ffac56',
     sky: '#b1c6d1', key: '#dbd6bf', earth: '#4e4739', density: 0.28,
   },
   wood: {
-    ground: [42, 50, 45], road: [81, 72, 55], fog: '#152123', stone: '#686e62',
-    dark: '#444740', vegetation: '#58694e', foliage: ['#2f5144', '#3d614b', '#4e6b52'], flame: '#ff9f58',
+    fog: '#152123', stone: '#686e62',
+    dark: '#444740', vegetation: '#58694e', flame: '#ff9f58',
     sky: '#9db7c6', key: '#d4d5bc', earth: '#474b39', density: 0.36,
   },
   crypt: {
-    ground: [43, 50, 57], road: [70, 79, 85], fog: '#121d29', stone: '#697788',
-    dark: '#3c5058', vegetation: '#587078', foliage: ['#384f56', '#49676d', '#5e7b7a'], flame: '#82e2d1',
+    fog: '#121d29', stone: '#697788',
+    dark: '#3c5058', vegetation: '#587078', flame: '#82e2d1',
     sky: '#95b5dc', key: '#c8d5e5', earth: '#3e4856', density: 0.13,
   },
+  vault: {
+    fog: '#191d17', stone: '#82917c', dark: '#4c5343', vegetation: '#626b51',
+    flame: '#c7d191',
+    sky: '#afc4af', key: '#d7d0a8', earth: '#495040', density: 0.11,
+  },
   belfry: {
-    ground: [59, 47, 48], road: [96, 68, 59], fog: '#241a24', stone: '#826c69',
-    dark: '#4c3e45', vegetation: '#76574c', foliage: ['#534851', '#654e4f', '#815e55'], flame: '#ff8b50',
+    fog: '#241a24', stone: '#826c69',
+    dark: '#4c3e45', vegetation: '#76574c', flame: '#ff8b50',
     sky: '#bbaccb', key: '#e4b7a0', earth: '#634843', density: 0.16,
   },
 };
@@ -34,66 +40,54 @@ export function groundY(zone, x, z) {
   return elevation * (road ? 0.39 : 1) - Math.max(0, 0.9 - outskirts) * 0.43;
 }
 
-const tone = (base, variation) => `rgb(${base.map(c => Math.round(c + variation)).join(',')})`;
-
 function terrainTexture(world, palette) {
   const resolution = 64;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = world.size * resolution;
   const ctx = canvas.getContext('2d');
-  const rnd = random(world.seed * 203);
-  const moss = world.id === 'wood' || world.id === 'watch';
-  ctx.fillStyle = tone(palette.ground, 0);
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const ground = sourceImage('forest_floor');
+  const stone = sourceImage('cobblestone_floor_04');
+  const vault = world.id === 'vault';
+  const crypt = world.id === 'crypt' || vault;
+  const belfry = world.id === 'belfry';
+
+  function fillPattern(context, image, scale) {
+    const pattern = context.createPattern(image, 'repeat');
+    pattern.setTransform(new DOMMatrix().scale(scale));
+    context.fillStyle = pattern;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  fillPattern(ctx, crypt ? stone : ground, crypt ? 0.41 : 0.48);
+  const paving = document.createElement('canvas');
+  paving.width = paving.height = canvas.width;
+  const road = paving.getContext('2d');
+  fillPattern(road, stone, belfry ? 0.47 : 0.42);
+  road.globalCompositeOperation = 'destination-in';
+  const mask = document.createElement('canvas');
+  mask.width = mask.height = world.size;
+  const m = mask.getContext('2d');
   for (const tile of world.tiles) {
-    const x = tile.x * resolution;
-    const z = tile.y * resolution;
-    const hue = Math.sin(tile.x * 0.68 + tile.y * 0.21) * 3.2 + (tile.seed - 0.5) * 7;
-    const shade = ctx.createRadialGradient(x + 35, z + 31, 9, x + 32, z + 32, 58);
-    shade.addColorStop(0, tone(tile.road ? palette.road : palette.ground, hue));
-    shade.addColorStop(1, tone(tile.road ? palette.road : palette.ground, hue - 5));
+    const radius = belfry ? 3.1 : 1.72;
+    const plaza = world.safe && Math.hypot(tile.x - 11, tile.y - 11) < 4.4;
+    const coverage = plaza ? 1 : Math.max(0, Math.min(1, (radius + 0.55 - tile.roadDistance) / 0.85));
+    m.fillStyle = `rgba(255,255,255,${coverage})`;
+    m.fillRect(tile.x, tile.y, 1, 1);
+  }
+  road.drawImage(mask, 0, 0, canvas.width, canvas.height);
+  ctx.drawImage(paving, 0, 0);
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.fillStyle = vault ? '#a3b2a0' : crypt ? '#9baec9' : belfry ? '#c8a7ab' : world.safe ? '#d2ccb6' : '#abb9a7';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.globalCompositeOperation = 'source-over';
+  for (const tile of world.tiles) {
+    const x = (tile.x + 0.5) * resolution;
+    const z = (tile.y + 0.5) * resolution;
+    const shade = ctx.createRadialGradient(x, z, 0, x, z, resolution * 1.42);
+    shade.addColorStop(0, crypt ? 'rgba(31,46,71,0.07)' : 'rgba(37,43,39,0.08)');
+    shade.addColorStop(1, 'transparent');
     ctx.fillStyle = shade;
-    ctx.fillRect(x, z, resolution, resolution);
-
-    if (tile.road && (world.id !== 'wood' || tile.seed > 0.63)) {
-      for (let row = 0; row < 3; row++) {
-        let left = x - (row % 2) * 11;
-        while (left < x + resolution - 2) {
-          const width = 12 + rnd() * 14;
-          const sx = Math.max(x, left);
-          const ex = Math.min(left + width, x + resolution);
-          const top = z + row * (resolution / 3);
-          const high = resolution / 3 - 2;
-          ctx.fillStyle = tone(palette.road, hue + (rnd() - 0.5) * 12);
-          ctx.beginPath();
-          ctx.moveTo(sx + 3, top + 1);
-          ctx.lineTo(ex - 2, top + 2 + rnd() * 2);
-          ctx.lineTo(ex - 1, top + high - 4);
-          ctx.lineTo(ex - 4, top + high);
-          ctx.lineTo(sx + 2, top + high - rnd() * 2);
-          ctx.closePath();
-          ctx.fill();
-          ctx.strokeStyle = '#18191875';
-          ctx.stroke();
-          ctx.strokeStyle = '#d2bb9c24';
-          ctx.beginPath();
-          ctx.moveTo(sx + 3, top + 4);
-          ctx.lineTo(ex - 4, top + 4);
-          ctx.stroke();
-          left += width;
-        }
-      }
-    }
-
-    for (let sample = 0; sample < 55; sample++) {
-      const px = x + rnd() * resolution;
-      const pz = z + rnd() * resolution;
-      const w = 1 + rnd() * (tile.road ? 6 : 9);
-      ctx.fillStyle = rnd() < 0.57 ? '#111a195d' : moss && rnd() < 0.34 ? '#85856248' : '#cec1a035';
-      ctx.beginPath();
-      ctx.ellipse(px, pz, w, w * 0.26, rnd() * 3, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    ctx.fillRect(x - resolution * 1.42, z - resolution * 1.42, resolution * 2.84, resolution * 2.84);
   }
   const texture = new T.CanvasTexture(canvas);
   texture.colorSpace = T.SRGBColorSpace;
@@ -108,7 +102,7 @@ function floor(world, palette) {
   for (let i = 0; i < positions.count; i++) positions.setY(i, groundY(world, positions.getX(i), positions.getZ(i)));
   terrain.computeVertexNormals();
   const texture = terrainTexture(world, palette);
-  const finish = new T.MeshStandardMaterial({ color: '#ffffff', map: texture, roughness: 0.97 });
+  const finish = new T.MeshStandardMaterial({ color: '#ffffff', map: texture, bumpMap: texture, bumpScale: 0.043, roughness: 0.95 });
   const mesh = new T.Mesh(terrain, finish);
   mesh.receiveShadow = true;
   mesh.name = 'walkable terrain';
@@ -121,19 +115,25 @@ function backdrop(world, palette) {
   shape.translate((world.size - 1) / 2, -0.52, (world.size - 1) / 2);
   const positions = shape.attributes.position;
   const colors = [];
-  const base = new T.Color(tone(palette.ground, -3));
+  const outsideTexture = new T.Texture(sourceImage(['crypt', 'vault'].includes(world.id) ? 'cobblestone_floor_04' : 'forest_floor'));
+  outsideTexture.colorSpace = T.SRGBColorSpace;
+  outsideTexture.wrapS = outsideTexture.wrapT = T.RepeatWrapping;
+  outsideTexture.repeat.setScalar((world.size + outer * 2) / 6.6);
+  outsideTexture.anisotropy = 4;
+  outsideTexture.needsUpdate = true;
+  const base = new T.Color(world.id === 'crypt' ? '#9da8b9' : world.id === 'belfry' ? '#ad9596' : '#9ca794');
   const fog = new T.Color(palette.fog);
   for (let i = 0; i < positions.count; i++) {
     const x = positions.getX(i);
     const z = positions.getZ(i);
     const d = Math.max(0, -x, -z, x - world.size + 1, z - world.size + 1);
     positions.setY(i, positions.getY(i) - d * 0.087 - Math.sin(x * 0.42 + z * 0.19) * Math.min(d * 0.07, 0.52));
-    const color = base.clone().lerp(fog, Math.min(0.67, d * 0.05));
+    const color = base.clone().lerp(fog, Math.min(0.84, d * 0.08));
     colors.push(color.r, color.g, color.b);
   }
   shape.setAttribute('color', new T.Float32BufferAttribute(colors, 3));
   shape.computeVertexNormals();
-  const finish = new T.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
+  const finish = new T.MeshStandardMaterial({ vertexColors: true, map: outsideTexture, roughness: 1 });
   const mesh = new T.Mesh(shape, finish);
   mesh.receiveShadow = true;
   return mesh;
@@ -155,7 +155,7 @@ const haloTexture = (() => {
 
 function makeFlame(palette, glow) {
   const root = new T.Group();
-  const shade = palette === PALETTES.crypt ? '#83edcf' : '#ffb15e';
+  const shade = palette === PALETTES.crypt ? '#83edcf' : palette === PALETTES.vault ? '#cad489' : '#ffb15e';
   const core = palette === PALETTES.crypt ? '#d2ffe7' : '#ffe1a1';
   const edge = new T.MeshBasicMaterial({ color: shade, fog: false, toneMapped: false });
   const center = new T.MeshBasicMaterial({ color: core, fog: false, toneMapped: false });
@@ -171,36 +171,15 @@ function makeFlame(palette, glow) {
 }
 
 function tree(root, prop, palette) {
-  const size = 1.35 + prop.seed * 1.6;
-  const wood = prop.type === 'pine' ? '#423d32' : '#55483a';
-  const rotate = prop.seed * Math.PI * 7;
-  root.rotation.y = rotate;
-  beam(root, [0, -0.05, 0], [0.1, size * 0.73, 0], 0.23 + prop.seed * 0.13, wood);
-  beam(root, [0.08, size * 0.64, 0], [0.22, size, -0.06], 0.16, wood);
-  for (let i = 0; i < 4; i++) {
-    const angle = i * Math.PI * 0.5;
-    const dx = Math.cos(angle);
-    const dz = Math.sin(angle);
-    beam(root, [0, 0.22, 0], [dx * 0.48, -0.015, dz * 0.37], 0.13, wood);
-  }
+  const height = 1.7 + prop.seed * 1.55;
   if (prop.type === 'pine') {
-    for (let i = 0; i < 5; i++) {
-      part(root, 'cone', palette.foliage[i % 3], [0.07, size * (0.48 + 0.15 * i), 0], [1.58 - i * 0.22, size * 0.37, 1.53 - i * 0.20],
-        { rotation: [(prop.seed - 0.8) * 0.23, i * 1.07, 0.08] });
-    }
-  } else {
-    for (let i = 0; i < 6; i++) {
-      const a = i * 2.4;
-      const y = size * (0.34 + i * 0.082);
-      const t = size * (0.22 - i * 0.018);
-      const dx = Math.cos(a) * t;
-      const dz = Math.sin(a) * t;
-      const end = [dx * 1.42, y + t * 1.67, dz * 1.42];
-      beam(root, [0.05, y, 0], [dx, y + t * 0.62, dz], 0.13 - i * 0.01, wood);
-      beam(root, [dx, y + t * 0.58, dz], end, 0.065 - i * 0.003, '#5b5040');
-      beam(root, [dx, y + t * 0.61, dz], [dx * 1.9, y + t * 1.21, dz * 1.7], 0.052, '#514b3d');
-    }
+    sceneAsset(prop.seed > 0.96 ? 'birch' : 'maple', root, {
+      height: height * 1.12, tint: palette === PALETTES.watch ? '#91a696' : '#92a18a',
+    });
+    return;
   }
+  const variant = ['dead-tree-a', 'dead-tree-b', 'dead-tree-c'][Math.floor(prop.seed * 9) % 3];
+  sceneAsset(variant, root, { height, tint: '#a99d99' });
 }
 
 function masonry(root, [x, y, z], w, h, d, palette, rnd, battered = false) {
@@ -218,43 +197,6 @@ function masonry(root, [x, y, z], w, h, d, palette, rnd, battered = false) {
   }
 }
 
-function house(root, palette, rnd) {
-  const w = 1.9;
-  const d = 1.88;
-  part(root, 'box', palette.dark, [0, 0.15, 0], [2.25, 0.32, 2.2]);
-  part(root, 'box', '#554d42', [0, 0.75, 0], [w, 1.21, d]);
-  for (const side of [-1, 1]) {
-    masonry(root, [0, 0.14, side * 0.93], w, 1.1, 0.13, palette, rnd);
-    const wing = new T.Group();
-    wing.rotation.y = Math.PI / 2;
-    root.add(wing);
-    masonry(wing, [0, 0.14, side * 0.94], d, 1.1, 0.13, palette, rnd);
-  }
-  const timber = '#41362e';
-  for (const x of [-0.89, 0.89]) for (const z of [-0.91, 0.91]) beam(root, [x, 0.21, z], [x, 1.44, z], 0.145, timber, 'box');
-  for (const side of [-1, 1]) {
-    const roof = new T.Group();
-    roof.position.set(side * 0.54, 1.63, 0);
-    roof.rotation.z = -side * 0.64;
-    root.add(roof);
-    part(roof, 'box', '#353c45', [0, 0, 0], [1.4, 0.13, 2.31]);
-    for (let i = 0; i < 8; i++) {
-      for (let j = 0; j < 3; j++) part(roof, 'box', ['#506065', '#424d56', '#4e545b'][(i + j) % 3],
-        [j * 0.452 - 0.442, 0.075 - j * 0.018, i * 0.28 - 0.96], [0.48, 0.056, 0.26], {
-          rotation: [0, (rnd() - 0.5) * 0.04, 0], shadow: false,
-        });
-    }
-  }
-  part(root, 'box', '#664e3d', [0.49, 1.93, -0.57], [0.37, 0.78, 0.45]);
-  part(root, 'box', palette.stone, [0.49, 2.32, -0.57], [0.47, 0.13, 0.53]);
-  part(root, 'box', '#2b2825', [-0.36, 0.43, 0.997], [0.48, 0.85, 0.09]);
-  for (const x of [-0.59, -0.13]) beam(root, [x, 0.06, 1.045], [x, 0.94, 1.045], 0.075, timber, 'box');
-  part(root, 'box', '#c79b66', [0.47, 0.82, 1.025], [0.45, 0.52, 0.065]);
-  part(root, 'box', '#ffb663', [0.47, 0.82, 1.069], [0.34, 0.37, 0.035], { style: 'light' });
-  part(root, 'box', timber, [0.47, 0.82, 1.099], [0.045, 0.39, 0.046]);
-  part(root, 'box', '#c79b66', [1.014, 0.81, 0.32], [0.06, 0.43, 0.45]);
-  part(root, 'box', '#ffb663', [1.05, 0.81, 0.32], [0.04, 0.30, 0.32], { style: 'light' });
-}
 
 function brazier(root, palette) {
   part(root, 'cylinder', palette.dark, [0, 0.09, 0], [0.44, 0.2, 0.44]);
@@ -285,17 +227,13 @@ export function buildScenery(world, scene) {
     if (prop.type === 'tree' || prop.type === 'pine') tree(root, prop, palette);
     if (prop.type === 'house') {
       root.rotation.y = Math.PI * 0.5 * Math.floor(prop.seed * 3);
-      house(root, palette, rnd);
+      sceneAsset(prop.seed > 0.51 ? 'house-a' : 'house-b', root, { width: 2.25, tint: '#aba697' });
     }
     if (prop.type === 'wall') {
-      const span = 1.3 + prop.seed * 0.3;
-      masonry(root, [0, -0.05, 0], span, 0.96, 0.46, palette, rnd, true);
-      for (const side of [-1, 1]) part(root, 'boulder', palette.stone, [side * 0.68, 0.03, 0.19], [0.39, 0.30, 0.35]);
+      sceneAsset('ruin', root, { height: 0.82 + prop.seed * 0.19, tint: palette.stone });
     }
     if (prop.type === 'pillar') {
-      masonry(root, [0, 0, 0], 0.53, 1.55 + prop.seed, 0.49, palette, rnd);
-      part(root, 'box', palette.stone, [0, 0.15, 0], [0.66, 0.26, 0.7]);
-      part(root, 'box', palette.stone, [0, 1.54 + prop.seed, 0], [0.65, 0.21, 0.67]);
+      sceneAsset('pillar', root, { height: 1.55 + prop.seed * 0.61, tint: '#8795a3' });
     }
     if (prop.type === 'rock' || prop.type === 'debris') {
       const width = prop.type === 'rock' ? 0.63 : 0.25;
@@ -338,6 +276,11 @@ export function buildScenery(world, scene) {
       part(root, 'cylinder', '#b88456', [0, 2.71, 0], [0.18, 0.45, 0.18], { style: 'metal' });
     }
   }
+  for (const prop of world.setPieces) {
+    const model = sceneAsset(prop.asset, shapes, { height: prop.size, rotation: prop.rotation,
+      tint: prop.tint ?? (world.id === 'crypt' ? '#9ca6b3' : world.id === 'belfry' ? '#b2a09f' : '#b8ae9f') });
+    model.position.set(prop.x, groundY(world, prop.x, prop.y), prop.y);
+  }
   for (const tile of world.tiles) {
     if (tile.road && tile.seed < 0.88 || !tile.road && rnd() > palette.density) continue;
     const x = tile.x + (rnd() - 0.5) * 0.70;
@@ -345,6 +288,10 @@ export function buildScenery(world, scene) {
     const y = groundY(world, x, z);
     const width = 0.08 + rnd() * 0.18;
     if (!tile.road && (world.id === 'watch' || world.id === 'wood')) {
+      if (tile.detail > 0.88) {
+        const bush = sceneAsset('bush', shapes, { height: 0.25 + tile.seed * 0.29, tint: '#87927b' });
+        bush.position.set(x, y, z);
+      }
       for (let i = 0; i < 5; i++) {
         const height = 0.09 + rnd() * 0.21;
         part(shapes, 'cone', palette.vegetation, [x + (rnd() - 0.5) * 0.29, y + height * 0.32, z + (rnd() - 0.5) * 0.24], [0.06, height, 0.035],
@@ -370,7 +317,7 @@ export function buildScenery(world, scene) {
       tree(root, { type: rnd() > 0.42 ? 'pine' : 'tree', seed: rnd() }, palette);
     } else {
       const h = 0.45 + rnd() * 2.17;
-      part(root, world.id === 'crypt' ? 'box' : 'boulder', palette.dark, [0, h * 0.25, 0], [0.6 + rnd(), h, 0.5 + rnd()],
+      part(root, ['crypt', 'vault'].includes(world.id) ? 'box' : 'boulder', palette.dark, [0, h * 0.25, 0], [0.6 + rnd(), h, 0.5 + rnd()],
         { rotation: [rnd() * 0.25, 0, rnd() * 0.35] });
     }
   }
@@ -379,29 +326,18 @@ export function buildScenery(world, scene) {
     surface, flames,
     zoneMaterials: [outside.material, halo, ...glow.owned],
     zoneGeometries: [outside.geometry],
+    zoneTextures: [outside.material.map],
   };
 }
 
 export function makeGate(palette) {
   const root = new T.Group();
-  const rnd = random(607);
-  const width = 0.64;
-  for (const side of [-1, 1]) {
-    masonry(root, [side * width, 0, 0], 0.34, 0.95, 0.45, palette, rnd);
-    part(root, 'box', palette.dark, [side * width, 0.10, 0], [0.46, 0.2, 0.54]);
-    part(root, 'box', '#9f815a', [side * width, 0.84, 0.24], [0.08, 0.32, 0.055], { style: 'light' });
-  }
-  for (let i = 0; i <= 8; i++) {
-    const angle = i * Math.PI / 8;
-    part(root, 'box', i % 3 ? palette.stone : '#a09379', [Math.cos(angle) * width, 0.9 + Math.sin(angle) * 0.57, 0],
-      [0.32, 0.27, 0.45], { rotation: [0, 0, angle] });
-  }
-  part(root, 'box', palette.dark, [0, 0.04, 0], [1.62, 0.13, 0.76]);
-  const inner = new T.Mesh(new T.CircleGeometry(0.47, 36), new T.MeshBasicMaterial({
-    color: '#ccbe91', transparent: true, opacity: 0.12, depthWrite: false, side: T.DoubleSide,
+  sceneAsset('doorway', root, { height: 1.75, tint: palette === PALETTES.crypt ? '#a9afb8' : '#b8a68e' });
+  const inner = new T.Mesh(new T.CircleGeometry(0.43, 36), new T.MeshBasicMaterial({
+    color: '#c7ae74', transparent: true, opacity: 0.24, depthWrite: false, side: T.DoubleSide,
   }));
-  inner.position.y = 0.76;
-  inner.scale.y = 1.43;
+  inner.position.y = 0.74;
+  inner.scale.y = 1.52;
   inner.userData.disposeGeometry = true;
   root.add(inner);
   return root;

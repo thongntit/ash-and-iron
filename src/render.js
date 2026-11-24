@@ -1,6 +1,7 @@
 import * as T from 'three';
-import { ASH_SEAL, IRON_SEAL } from './content.js';
-import { animateCharacter, makeCharacter, makeSeal } from './characters.js';
+import { ASH_SEAL, IRON_SEAL, LEDGER, VAULT_REWARD } from './content.js';
+import { animateWisp, makeWisp, makeSeal } from './characters.js';
+import { animateRig, riggedAsset, disposeRig, sceneAsset } from './assets.js';
 import { effectMaterial, part } from './mesh.js';
 import { buildScenery, groundY, makeGate, PALETTES } from './terrain.js';
 import { clamp, distance, random } from './world.js';
@@ -10,10 +11,11 @@ const TAU = Math.PI * 2;
 const HOSTILE = '#ed815f';
 const GOLD = '#e3b877';
 const sq2 = Math.sqrt(2);
+const slash = new T.RingGeometry(0.79, 1, 28, 1, -1.15, 2.30).rotateX(-Math.PI / 2);
 
 function waypoint(game) {
   const stage = game.state.stage;
-  if (stage >= 5) return null;
+  if (stage >= 5 && game.world.id !== 'vault') return null;
   if (game.world.id === 'belfry' && stage === 3) {
     return game.enemies.find(enemy => enemy.type === 'boss' && enemy.hp > 0);
   }
@@ -22,6 +24,7 @@ function waypoint(game) {
     wood: stage === 1 ? ASH_SEAL : 'crypt',
     crypt: stage === 2 ? IRON_SEAL : 'belfry',
     belfry: 'home',
+    vault: game.state.vaultCleared ? 'wood' : VAULT_REWARD,
   }[game.world.id];
   return game.markers().find(marker => marker.id === next);
 }
@@ -58,7 +61,7 @@ function releaseDynamic(root) {
 }
 
 function markSize(entity) {
-  if (!entity.kind) return entity.type === 'boss' ? [0.74, 2.88] : entity.type === 'wisp' ? [0.43, 1.12] : [0.48, 1.54];
+  if (!entity.kind) return ['boss', 'oathbreaker'].includes(entity.type) ? [0.74, entity.type === 'boss' ? 2.88 : 2.06] : entity.type === 'wisp' ? [0.43, 1.12] : [0.48, 1.54];
   if (entity.kind === 'gate') return [0.84, 1.62];
   return ['keeper', 'smith'].includes(entity.kind) ? [0.44, 1.42] : [0.41, 1.10];
 }
@@ -100,6 +103,7 @@ export class Renderer {
     this.webgl.outputColorSpace = T.SRGBColorSpace;
     this.camera = new T.OrthographicCamera(0, 1, 1, 0, 0.5, 108);
     this.follow = { x: 0, y: 0 };
+    this.zoom = 1;
     this.raycaster = new T.Raycaster();
     this.pointer = new T.Vector2();
     this.selection = new T.Box3();
@@ -109,7 +113,12 @@ export class Renderer {
     this.overlay.id = 'world-labels';
     this.overlay.setAttribute('aria-hidden', 'true');
     this.ctx = this.overlay.getContext('2d');
-    canvas.after(this.overlay);
+    this.waypointButton = document.createElement('button');
+    this.waypointButton.type = 'button';
+    this.waypointButton.className = 'waypoint-button';
+    this.waypointButton.hidden = true;
+    this.waypointButton.innerHTML = '<span aria-hidden="true">➤</span><b></b>';
+    canvas.after(this.overlay, this.waypointButton);
     this.map = map;
     this.resize();
   }
@@ -118,18 +127,23 @@ export class Renderer {
     this.width = Math.max(1, this.canvas.clientWidth);
     this.height = Math.max(1, this.canvas.clientHeight);
     const ratio = Math.min(this.width < 700 ? 1.25 : 1.5, window.devicePixelRatio || 1);
-    this.webgl.setPixelRatio(this.software ? 0.74 : ratio);
+    this.webgl.setPixelRatio(this.software ? 0.62 : ratio);
     this.webgl.setSize(this.width, this.height, false);
     this.overlay.width = Math.round(this.width * ratio);
     this.overlay.height = Math.round(this.height * ratio);
     this.ratio = ratio;
-    this.unit = clamp(this.width * 0.041, 31, 49) * sq2;
+    this.unit = clamp(this.width * 0.041, 31, 49) * sq2 * this.zoom;
     this.camera.left = -this.width * 0.5 / this.unit;
     this.camera.right = this.width * 0.5 / this.unit;
     this.camera.top = this.height * 0.48 / this.unit;
     this.camera.bottom = -this.height * 0.52 / this.unit;
     this.camera.updateProjectionMatrix();
     this.placeCamera();
+  }
+
+  zoomBy(direction) {
+    this.zoom = clamp(this.zoom - direction * 0.085, 0.79, 1.30);
+    this.resize();
   }
 
   center(player) {
@@ -201,6 +215,7 @@ export class Renderer {
       for (const model of this.models.values()) this.disposeModel(model);
       for (const material of this.zoneMaterials) material.dispose();
       for (const geometry of this.zoneGeometries) geometry.dispose();
+      for (const texture of this.zoneTextures) texture.dispose();
       this.scene.clear();
     }
     const world = game.world;
@@ -230,13 +245,14 @@ export class Renderer {
     scene.add(fill);
     const levelGeometry = new T.Group();
     this.levelGeometry = levelGeometry;
-    const { surface, flames, zoneMaterials, zoneGeometries } = buildScenery(world, levelGeometry);
+    const { surface, flames, zoneMaterials, zoneGeometries, zoneTextures } = buildScenery(world, levelGeometry);
     this.surface = surface;
     this.flames = flames;
     this.zoneMaterials = zoneMaterials;
     this.zoneGeometries = zoneGeometries;
+    this.zoneTextures = zoneTextures;
     scene.add(levelGeometry);
-    this.lamps = Array.from({ length: 4 }, () => {
+    this.lamps = Array.from({ length: this.software ? 2 : 4 }, () => {
       const lamp = new T.PointLight(palette.flame, 0, 6, 1.8);
       scene.add(lamp);
       return lamp;
@@ -244,12 +260,15 @@ export class Renderer {
     const lantern = new T.PointLight('#eac087', 7, 4.6, 2);
     scene.add(lantern);
     this.lantern = lantern;
+    this.castLight = new T.PointLight('#e8a070', 0, 7, 2);
+    scene.add(this.castLight);
     this.dust = haze(palette, world);
     scene.add(this.dust);
     this.characters = new T.Group();
     this.combat = new T.Group();
     this.selectedRing = disc(this.combat, HOSTILE, 1, 0.9);
     this.playerRing = disc(this.combat, '#e4b877', 0.27, 0.82);
+    this.guard = disc(this.combat, '#f1cb80', 0.62, 0.95);
     this.destination = disc(this.combat, '#e4b877', 0.19, 0.78);
     scene.add(this.characters, this.combat);
     this.scene = scene;
@@ -261,12 +280,9 @@ export class Renderer {
   }
 
   disposeModel(model) {
+    if (model.mixer) disposeRig(model);
     model.root.traverse(mesh => {
       if (mesh.userData.disposeGeometry) mesh.geometry.dispose();
-      if (mesh.geometry?.isBufferGeometry && mesh.material?.side === T.DoubleSide && mesh.material.isMeshStandardMaterial) {
-        mesh.geometry.dispose();
-        mesh.material.dispose();
-      }
     });
     releaseDynamic(model.root);
   }
@@ -277,6 +293,10 @@ export class Renderer {
       const root = makeGate(PALETTES[game.world.id]);
       root.rotation.y = Math.PI * 0.25;
       model = { root, height: 1.58 };
+    } else if ([LEDGER, VAULT_REWARD].includes(entity.kind)) {
+      const root = new T.Group();
+      sceneAsset('coffer', root, { height: 0.64, rotation: 0.54, tint: '#e3c398' });
+      model = { root, height: 0.66 };
     } else if (entity.kind && !['keeper', 'smith'].includes(entity.kind)) {
       model = makeSeal(entity.kind === IRON_SEAL ? '#a3cdc8' : entity.kind === ASH_SEAL ? '#f0ad60' : '#94b797', entity.kind === 'shrine');
     } else if (entity.item) {
@@ -287,14 +307,15 @@ export class Renderer {
       disc(root, color, 0.21, 0.68);
       model = { root, gem, height: 0.55 };
     } else {
-      model = makeCharacter(entity === game.player ? game.state.classId : entity.kind ?? entity.type);
+      const kind = entity === game.player ? game.state.classId : entity.kind ?? entity.type;
+      model = kind === 'wisp' ? makeWisp() : riggedAsset(kind);
     }
     this.characters.add(model.root);
     this.models.set(entity, model);
     return model;
   }
 
-  trackModels(game, visibleMarkers, selected) {
+  trackModels(game, visibleMarkers, selected, dt) {
     const entities = [game.player, ...visibleMarkers, ...game.enemies, ...game.drops];
     const seen = new Set(entities);
     for (const [entity, model] of this.models) {
@@ -310,7 +331,8 @@ export class Renderer {
       const [x, y] = this.project(entity.x, entity.y);
       model.root.visible = x > -115 && x < this.width + 115 && y > -85 && y < this.height + 165;
       if (!model.root.visible) continue;
-      if (model.body) animateCharacter(model, entity, game.time, entity === game.player);
+      if (model.mixer) animateRig(model, entity, game.time, dt);
+      if (model.body) animateWisp(model, entity, game.time);
       if (model.gem) {
         model.gem.rotation.y = game.time * 1.55;
         model.gem.position.y = (entity.item ? 0.22 : 0.84) + Math.sin(game.time * 3.4 + entity.x) * 0.066;
@@ -318,6 +340,10 @@ export class Renderer {
     }
     const player = game.player;
     this.playerRing.position.set(player.x, groundY(game.world, player.x, player.y) + 0.034, player.y);
+    this.guard.visible = player.guarded > game.time;
+    this.guard.position.copy(this.playerRing.position);
+    this.guard.position.y += 0.04;
+    this.guard.material.opacity = 0.65 + Math.sin(game.time * 8) * 0.20;
     this.selectedRing.visible = Boolean(selected);
     if (selected) {
       const [scale] = markSize(selected);
@@ -380,6 +406,15 @@ export class Renderer {
       body.root.position.set(shot.x, groundY(this.world, shot.x, shot.y) + 0.61, shot.y);
       body.root.rotation.y = Math.PI * 0.5 - shot.angle;
     }
+    for (const trap of game.traps) {
+      const clip = this.clip(trap, root => ({
+        ring: disc(root, '#9cce87', 1.08, 0.86),
+        center: part(root, 'blade', '#bfe09a', [0, 0.14, 0], [0.22, 0.31, 0.22], { style: 'light', shadow: false }),
+      }));
+      this.groundEffect(clip, trap, 1);
+      clip.ring.material.opacity = 0.70 + Math.sin(game.time * 5) * 0.25;
+      clip.center.rotation.y = game.time * 2.8;
+    }
     for (const effect of game.effects) {
       if (effect.kind === 'float') continue;
       const life = clamp((game.time - effect.born) / effect.life, 0, 1);
@@ -388,10 +423,20 @@ export class Renderer {
         if (effect.kind === 'burst' || effect.kind === 'hit') for (let i = 0; i < (effect.kind === 'burst' ? 10 : 6); i++) {
           rays.push(part(root, 'cut', effectMaterial(effect.color, 0.85), [0, 0, 0], [0.07, 0.14, 0.07], { shadow: false }));
         }
+        if (effect.kind === 'cleave') {
+          const arc = new T.Mesh(slash, effectMaterial(effect.color, 0.85));
+          arc.position.y = 0.56;
+          root.add(arc);
+          return { ring: arc, rays };
+        }
         return { ring: disc(root, effect.color, 1, 0.85), rays };
       });
       const size = effect.radius * (0.5 + life * 0.58);
       this.groundEffect(clip, effect, size);
+      if (effect.kind === 'cleave') {
+        clip.root.rotation.y = -effect.angle + (0.42 - life * 0.84);
+        clip.ring.position.y = 0.59 + life * 0.21;
+      }
       clip.ring.visible = effect.kind !== 'hit';
       clip.ring.material.opacity = (1 - life) * 0.91;
       clip.rays.forEach((ray, i) => {
@@ -414,6 +459,12 @@ export class Renderer {
     const { x, y } = this.follow;
     this.key.position.set(x - 7.8, 15.5, y - 5.2);
     this.key.target.position.set(x, 0, y);
+    const cast = game.effects.findLast(effect => effect.kind === 'burst');
+    this.castLight.intensity = cast ? (1 - (game.time - cast.born) / cast.life) * 23 : 0;
+    if (cast) {
+      this.castLight.position.set(cast.x, groundY(this.world, cast.x, cast.y) + 0.86, cast.y);
+      this.castLight.color.set(cast.color);
+    }
     this.lantern.position.set(game.player.x, groundY(this.world, game.player.x, game.player.y) + 1.25, game.player.y);
     const closest = [...this.flames].sort((a, b) =>
       (a.position.x - x) ** 2 + (a.position.z - y) ** 2 - (b.position.x - x) ** 2 - (b.position.z - y) ** 2);
@@ -461,12 +512,12 @@ export class Renderer {
       const x = marker.x;
       const z = marker.y;
       const [px, py] = this.project(x, z);
-      if (marker === goal) {
+      if (marker === goal || marker.kind === LEDGER) {
         const [, tip] = this.project(x, z, (this.models.get(marker)?.height ?? 1.1) + 0.27);
         const gy = tip + Math.sin(game.time * 4.1) * 2.8;
         c.shadowBlur = 16;
         c.shadowColor = '#e6ab5e';
-        diamond(c, px, gy, 6.5, '#f1c384');
+        diamond(c, px, gy, 6.5, marker.kind === LEDGER ? '#b7cc97' : '#f1c384');
         c.shadowBlur = 0;
       }
       this.label(marker.label, px, py + 18, marker === goal ? '#f1c384' : '#e8ddc4');
@@ -501,29 +552,23 @@ export class Renderer {
       c.fillText(effect.text, x, y);
       c.globalAlpha = 1;
     }
+    this.guide = null;
     if (goal) {
       const [x, y] = this.project(goal.x, goal.y);
       const dx = x - width / 2;
       const dy = y - height / 2;
       const r = Math.max(Math.abs(dx) / (width * 0.36), Math.abs(dy) / (height * 0.26));
       if (r > 1.12) {
-        const xx = width / 2 + dx / r;
-        const yy = height / 2 + dy / r;
-        c.save();
-        c.translate(xx, yy);
-        c.rotate(Math.atan2(dy, dx));
-        c.fillStyle = GOLD;
-        c.beginPath();
-        c.moveTo(12, 0);
-        c.lineTo(-4, -7);
-        c.lineTo(-1, 0);
-        c.lineTo(-4, 7);
-        c.closePath();
-        c.fill();
-        c.restore();
-        this.label(goal.label ?? goal.name, xx, yy + 22, '#f3cd94');
+        this.guide = goal;
+        this.waypointButton.style.left = `${width / 2 + dx / r}px`;
+        this.waypointButton.style.top = `${height / 2 + dy / r}px`;
+        this.waypointButton.firstElementChild.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
+        const label = this.waypointButton.lastElementChild;
+        const name = goal.label ?? goal.name;
+        if (label.textContent !== name) label.textContent = name;
       }
     }
+    this.waypointButton.hidden = !this.guide;
     if (game.player.flash > 0) {
       c.strokeStyle = `rgba(216,90,66,${game.player.flash})`;
       c.lineWidth = 20;
@@ -551,7 +596,7 @@ export class Renderer {
     ctx.drawImage(this.minimapBase, 0, 0);
     for (const marker of markers) {
       const [x, y] = point(marker.x, marker.y);
-      oval(ctx, x, y, 2.65, marker.kind === 'gate' ? '#a8c3c0' : '#d1ba92');
+      oval(ctx, x, y, 2.65, marker.kind === 'gate' ? '#a8c3c0' : marker.kind === LEDGER ? '#b7cc97' : '#d1ba92');
     }
     if (goal) {
       const [x, y] = point(goal.x, goal.y);
@@ -568,14 +613,15 @@ export class Renderer {
     this.follow.y += (game.player.y - this.follow.y) * Math.min(1, dt * 7);
     this.placeCamera();
     const markers = game.markers();
-    this.trackModels(game, markers, selected);
+    this.trackModels(game, markers, selected, dt);
     this.lighting(game);
     this.effects(game);
     if (game.time > this.shadowAt) {
       this.webgl.shadowMap.needsUpdate = true;
-      this.shadowAt = game.time + (this.software ? 0.14 : 0.034);
+      this.shadowAt = game.time + (this.software ? 0.56 : 0.034);
     }
     this.webgl.render(this.scene, this.camera);
+    this.canvas.dataset.renderedZone = game.world.id;
     const goal = waypoint(game);
     this.overlayLabels(game, markers, selected, goal);
     this.minimap(game, markers, goal);

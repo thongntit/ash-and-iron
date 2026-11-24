@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
 const directory = resolve('dist');
@@ -12,7 +12,7 @@ if (!js || !css || !icon) throw new Error('Expected Vite script, stylesheet, and
 
 const stylesheetPath = fromBuild(css[1]);
 let stylesheet = await readFile(stylesheetPath, 'utf8');
-const types = { webp: 'image/webp', png: 'image/png', woff2: 'font/woff2' };
+const types = { webp: 'image/webp', png: 'image/png', woff2: 'font/woff2', glb: 'model/gltf-binary', ogg: 'audio/ogg' };
 
 async function asData(path) {
   const type = types[path.split('.').pop()];
@@ -30,11 +30,17 @@ const favicon = await asData(fromBuild(icon[1]));
 const notices = await Promise.all([
   readFile(resolve('node_modules/three/LICENSE'), 'utf8'),
   ...['cinzel', 'inter'].map(family => readFile(fromBuild(`fonts/${family}-OFL.txt`), 'utf8')),
+  ...((await readdir(fromBuild('licenses'))).sort()).map(name => readFile(fromBuild(`licenses/${name}`), 'utf8')),
 ]);
+const filenames = (await readdir(fromBuild('game-assets'))).sort();
+const embedded = {};
+for (const name of filenames) embedded[name] = await asData(fromBuild(`game-assets/${name}`));
 const result = input
   .replace(js[0], () => `<script type="module">\n${script}\n</script>`)
   .replace(css[0], () => `<style>\n${stylesheet}\n</style>`)
   .replace(icon[0], () => `<link rel="icon" href="${favicon}">`)
+  .replace('</body>', () => `<script type="application/json" id="offline-assets">${JSON.stringify(embedded)}</script>
+</body>`)
   .replace('</html>', () => `<!-- Third-party notices\n${notices.join('\n\n')}\n-->\n</html>`);
 
 await writeFile(destination, result);

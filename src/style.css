@@ -81,7 +81,7 @@ progress::-moz-progress-bar{background:#caa372}
 .notice p{font-size:11px;color:#ded0b8;line-height:1.45;margin-top:3px}
 @keyframes slide-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .interact-hint{position:absolute;left:50%;transform:translateX(-50%);bottom:124px;font-size:11px;background:#131814e8;border:1px solid #8874526b;padding:5px 9px;color:#ead9b9;pointer-events:none}
-.hud{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:min(443px,98vw);pointer-events:none}
+.hud{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:min(484px,98vw);pointer-events:none}
 .hud-body{display:grid;grid-template-columns:70px minmax(0,1fr) 70px;align-items:end;gap:10px;padding:8px 9px 5px;background:linear-gradient(0deg,#121614f5,#171b18c8);border:1px solid #8b765675;box-shadow:0 2px 28px #0a0e0bc2}
 .vital{display:grid;justify-items:center;gap:4px;color:#c5b8a2;text-transform:uppercase;font-size:8px;font-weight:700;letter-spacing:.15em}
 .orb{isolation:isolate;position:relative;width:60px;height:60px;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:radial-gradient(circle at 50% 60%,#343129,#1b201b);border:2px solid #a48b626e;box-shadow:inset 0 0 0 3px #151a15c4,0 0 10px #131811}
@@ -91,7 +91,7 @@ progress::-moz-progress-bar{background:#caa372}
 .orb b{font-size:11px;letter-spacing:0;color:#fff2dd;text-shadow:0 2px 5px #211613}
 .level-line,.hud-caption{display:flex;justify-content:space-between;color:#c9b793;font-size:9px;font-weight:700;margin-bottom:4px;gap:6px}
 .hud-caption{margin:3px 3px 0;color:#c6b18d;text-shadow:0 1px 5px #080b07}
-.skills{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin-top:5px}
+.skills{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-top:5px}
 .skill{height:47px;position:relative;border:1px solid #87755377;background:linear-gradient(#33302a,#1c211d);pointer-events:auto;overflow:hidden}
 .skill-icon{display:block;font-size:20px;line-height:1;color:#d6af73;text-shadow:0 0 9px #d99c61a8;transform:translateY(-4px)}
 .skill kbd{position:absolute;bottom:2px;left:50%;transform:translateX(-50%);padding:0 3px;font-size:8px;line-height:1.3}
@@ -169,4 +169,47 @@ dialog::backdrop{background:#0a0d0bd1;backdrop-filter:blur(3px)}
   width: 100%;
   height: 100%;
   pointer-events: none;
+}
+
+.contract-card {
+  margin: 0 0 15px;
+  padding: 12px;
+  background: linear-gradient(100deg, #30291e, #191d19);
+  border: 1px solid #96775178;
+}
+.contract-card h3 {
+  margin-bottom: 5px;
+}
+.contract-card p {
+  color: #cabfa8;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.contract-card button {
+  margin-top: 10px;
+}
+
+.waypoint-button {
+  position: absolute;
+  background: #151916df;
+  border: 1px solid #9a7e5478;
+  border-radius: 3px;
+  color: #f2cc94;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  padding: 6px 8px;
+  transform: translate(-50%, -50%);
+}
+.waypoint-button:hover {
+  background: #332c21;
+  border-color: #daa963;
+}
+.waypoint-button span {
+  display: inline-block;
+  color: #deb578;
+  font-size: 13px;
 }

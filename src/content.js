@@ -3,16 +3,19 @@ export const CLASSES = {
     name: 'Warden', mark: '⚔', role: 'Vanguard', color: '#d7aa6d', health: 136, damage: 25, reach: 1.55,
     description: 'An ironclad sentinel who breaks enemy lines at close range.',
     attack: 'Iron Cleave', art: 'Cinder Sweep', artTip: 'Scorch every foe around you.', cost: 30,
+    utility: 'Ivory Guard', utilityTip: 'Brace against damage for four seconds and strike nearby foes.', utilityMark: '◈', utilityCost: 24,
   },
   witch: {
     name: 'Ember Witch', mark: '✷', role: 'Spellcaster', color: '#f49b72', health: 92, damage: 22, reach: 6.7,
     description: 'A wandering firekeeper who burns down threats from a distance.',
     attack: 'Ember Bolt', art: 'Pyre Bloom', artTip: 'Erupt the ground under your cursor.', cost: 35,
+    utility: 'Ash Step', utilityTip: 'Blink toward the cursor and burn foes near your departure point.', utilityMark: '✧', utilityCost: 22,
   },
   scout: {
     name: 'Hollow Scout', mark: '➶', role: 'Skirmisher', color: '#98bba2', health: 108, damage: 23, reach: 7.6,
     description: 'A patient marksman whose arrows pierce clustered foes.',
-    attack: 'Thorn Arrow', art: 'Briar Volley', artTip: 'Send three piercing arrows toward your cursor.', cost: 28,
+    attack: 'Thorn Bolt', art: 'Briar Volley', artTip: 'Send three piercing bolts toward your cursor.', cost: 28,
+    utility: 'Grave Snare', utilityTip: 'Lay a snare that wounds and slows the first group of foes to reach it.', utilityMark: '⌘', utilityCost: 22,
   },
 };
 
@@ -27,6 +30,14 @@ export const QUESTS = [
 
 export const ASH_SEAL = 'ashSeal';
 export const IRON_SEAL = 'ironSeal';
+export const LEDGER = 'ledger';
+export const VAULT_REWARD = 'vaultReward';
+export const CONTRACT = [
+  'Ask Smith Oren about his missing ledger.',
+  'Find the courier’s coffer south of the Cinderwood entrance.',
+  'Take the recovered ledger back to Smith Oren.',
+  'Oren paid for the recovered ledger.',
+];
 
 const gate = (id, x, y, dest, arrival, label) => ({ kind: 'gate', id, x, y, dest, arrival, label });
 const npc = (kind, x, y, label) => ({ kind, id: kind, x, y, label });
@@ -42,13 +53,13 @@ export const ZONES = {
   },
   wood: {
     name: 'Cinderwood', subtitle: 'The pines still remember the fire', theme: 'wood', size: 29, seed: 306,
-    spawn: [4, 16], paths: [[[2, 16], [8, 16], [12, 12], [19, 11], [26, 5]], [[12, 12], [16, 20], [24, 22]], [[8, 16], [7, 23]]],
-    markers: [gate('watch', 2, 16, 'watch', [19, 8], 'To Gloamwatch'), npc(ASH_SEAL, 24, 22, 'Ash Seal'), gate('crypt', 26, 5, 'crypt', [4, 17], 'To the Reliquary')],
+    spawn: [4, 16], paths: [[[2, 16], [8, 16], [12, 12], [19, 11], [26, 5]], [[12, 12], [16, 20], [24, 22]], [[8, 16], [7, 23], [9, 25]]],
+    markers: [gate('watch', 2, 16, 'watch', [19, 8], 'To Gloamwatch'), npc(ASH_SEAL, 24, 22, 'Ash Seal'), npc(LEDGER, 6.4, 22.1, 'Courier’s Coffer'), gate('vault', 9, 25, 'vault', [4, 15], 'To Blackroot Vault'), gate('crypt', 26, 5, 'crypt', [4, 17], 'To the Reliquary')],
     props: [['brazier', 23, 21], ['brazier', 25, 21], ['altar', 24, 23], ['wall', 11, 9], ['wall', 17, 17], ['wall', 22, 23], ['wall', 24, 6]],
     enemies: [
       enemy('thrall', 8, 15), enemy('thrall', 9, 17), enemy('husk', 11, 13), enemy('archer', 13, 11), enemy('thrall', 14, 12), enemy('husk', 17, 9), enemy('archer', 20, 11), enemy('thrall', 19, 12),
       enemy('husk', 15, 17), enemy('thrall', 18, 20), enemy('archer', 20, 21), enemy('thrall', 22, 22), enemy('brute', 24, 21, 'Shrine Reaver'),
-      enemy('thrall', 7, 22), enemy('husk', 6, 24), enemy('archer', 25, 8),
+      enemy('thrall', 7, 22), enemy('husk', 6, 24, 'Cinderwood Deserter'), enemy('archer', 25, 8),
     ],
   },
   crypt: {
@@ -60,6 +71,27 @@ export const ZONES = {
       enemy('husk', 7, 16), enemy('husk', 9, 15), enemy('archer', 8, 11), enemy('wisp', 11, 10), enemy('husk', 13, 11), enemy('brute', 16, 9), enemy('archer', 18, 7),
       enemy('wisp', 18, 13), enemy('husk', 17, 16), enemy('archer', 20, 18), enemy('wisp', 21, 19), enemy('knight', 23, 17, 'Reliquary Knight'),
       enemy('brute', 11, 22), enemy('wisp', 22, 5), enemy('husk', 24, 7),
+    ],
+  },
+  vault: {
+    name: 'Blackroot Vault', subtitle: 'The watch kept one last secret', theme: 'vault', size: 25, seed: 527,
+    spawn: [4, 15], paths: [
+      [[2, 15], [8, 15], [8, 11], [13, 11], [16, 13], [20, 11], [22, 11]],
+      [[8, 15], [10, 20], [16, 20], [16, 13]], [[13, 11], [12, 7], [15, 5]],
+    ],
+    markers: [
+      gate('wood', 2, 15, 'wood', [8, 23.6], 'To Cinderwood'),
+      npc(VAULT_REWARD, 22, 11, 'Blackroot Reliquary'),
+    ],
+    props: [
+      ['brazier', 6, 14], ['brazier', 12, 10], ['brazier', 17, 14], ['brazier', 21, 9],
+      ['brazier', 21, 13], ['pillar', 18, 10], ['pillar', 18, 13], ['altar', 23, 11],
+    ],
+    enemies: [
+      enemy('husk', 8, 14), enemy('thrall', 9, 16), enemy('archer', 8, 11), enemy('husk', 10, 11),
+      enemy('wisp', 13, 11), enemy('husk', 15, 13), enemy('archer', 17, 13),
+      enemy('brute', 11, 20), enemy('husk', 15, 20), enemy('archer', 13, 7), enemy('wisp', 15, 6),
+      enemy('oathbreaker', 20.3, 11.0, 'The Oathbreaker'),
     ],
   },
   belfry: {
@@ -80,6 +112,7 @@ export const ENEMIES = {
   wisp: { name: 'Grave Wisp', hp: 55, speed: 2.3, damage: 14, radius: 0.35, xp: 40, gold: 14, color: '#90cdca', ranged: true },
   brute: { name: 'Furnace Brute', hp: 134, speed: 1.38, damage: 23, radius: 0.57, xp: 70, gold: 26, color: '#a76c53' },
   knight: { name: 'Votive Knight', hp: 205, speed: 1.55, damage: 28, radius: 0.62, xp: 110, gold: 39, color: '#8d8eae' },
+  oathbreaker: { name: 'The Oathbreaker', hp: 320, speed: 1.81, damage: 24, radius: 0.69, xp: 165, gold: 54, color: '#a9a477' },
   boss: { name: 'The Bellworn', hp: 740, speed: 1.72, damage: 34, radius: 0.8, xp: 320, gold: 110, color: '#d89150' },
 };
 
@@ -98,6 +131,9 @@ export function makeItem(slot, tier, rank, id) {
     damage: slot === 'weapon' ? power : slot === 'charm' ? Math.ceil(power / 2) : 0,
     health: slot === 'armor' ? 5 * power : slot === 'charm' ? 2 * power : 0,
     defense: slot === 'armor' ? Math.ceil(power / 2) : 0,
+    crit: tier > 0 && slot === 'weapon' ? 3 + tier * 2 : 0,
+    barrier: tier > 1 && slot === 'armor' ? tier * 2 : 0,
+    recovery: tier > 0 && slot === 'charm' ? 0.65 + tier * 0.55 : 0,
     value: 5 + power * 2,
   };
 }

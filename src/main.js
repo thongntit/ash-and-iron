@@ -1,6 +1,7 @@
 import './style.css';
 import { Audio } from './audio.js';
-import { CLASSES, QUESTS, SLOTS, TIERS, ZONES, makeItem } from './content.js';
+import { loadAssets } from './assets.js';
+import { CLASSES, CONTRACT, QUESTS, SLOTS, TIERS, ZONES, makeItem } from './content.js';
 import { Game, SAVE_KEY, XP, readSave } from './game.js';
 import { Renderer } from './render.js';
 import { distance } from './world.js';
@@ -114,10 +115,36 @@ function onEvent(type, detail) {
   if (type === 'victory') openPanel('victory');
 }
 
-function start(classId, previousSave) {
+let assetsReady = false;
+
+async function start(classId, previousSave) {
+  if (!assetsReady) {
+    openPanel('loading');
+    try {
+      await loadAssets((current, total) => {
+        const meter = $('#loading-meter');
+        if (!meter) return;
+        meter.max = total;
+        meter.value = current;
+        $('#loading-progress').textContent = `${current} / ${total}`;
+      });
+      assetsReady = true;
+    } catch (error) {
+      console.error(error);
+      openPanel('load-error');
+      return;
+    }
+  }
   if (!renderer) {
     try {
       renderer = new Renderer(canvas, $('#map'));
+      renderer.waypointButton.addEventListener('click', () => {
+        const marker = renderer.guide;
+        if (!marker || !game || modal.open || game.dead) return;
+        if (marker.kind) game.move(marker, null, marker);
+        else game.move(marker, marker);
+        canvas.focus({ preventScroll: true });
+      });
     } catch {
       openPanel('graphics');
       return;
@@ -138,6 +165,8 @@ function start(classId, previousSave) {
   $('.skill-icon').textContent = game.class.mark;
   $('#primary').title = game.class.attack;
   $('#art').title = `${game.class.art} · ${game.class.cost} spirit. ${game.class.artTip}`;
+  $('#utility .skill-icon').textContent = game.class.utilityMark;
+  $('#utility').title = `${game.class.utility} · ${game.class.utilityCost} spirit. ${game.class.utilityTip}`;
   $('#dodge').title = 'Dodge · Briefly avoid damage';
   $('#heal').title = 'Healing draught · Restore life';
   updateHUD();
@@ -161,8 +190,11 @@ function updateHUD() {
   const p = game.player;
   const state = game.state;
   const [, objective] = QUESTS[state.stage];
-  $('#quest-title').textContent = QUESTS[state.stage][0];
-  $('#quest-objective').textContent = objective;
+  const vault = state.zone === 'vault';
+  const oathbreaker = game.enemies.find(enemy => enemy.type === 'oathbreaker' && enemy.hp > 0);
+  $('#quest-title').textContent = vault ? 'Blackroot Vault' : QUESTS[state.stage][0];
+  $('#quest-objective').textContent = !vault ? objective : state.vaultCleared
+    ? 'Return to Cinderwood' : oathbreaker ? 'Defeat the Oathbreaker' : 'Open the Blackroot Reliquary';
   $('#health-fill').style.height = `${100 * p.hp / game.maxHP}%`;
   $('#health-value').textContent = Math.ceil(p.hp);
   $('#health-panel').setAttribute('aria-label', `Life ${Math.ceil(p.hp)} of ${game.maxHP}`);
@@ -175,15 +207,18 @@ function updateHUD() {
   $('#draught-count').textContent = state.draughts;
   $('#scrip').textContent = `◈ ${state.gold} scrip`;
   $('#art').classList.toggle('wait', p.spirit < game.class.cost || game.artReady > game.time);
+  $('#utility').classList.toggle('wait', game.world.safe || p.spirit < game.class.utilityCost || game.utilityReady > game.time);
   $('#dodge').classList.toggle('wait', game.dodgeReady > game.time);
   $('#heal').classList.toggle('wait', !state.draughts || p.hp >= game.maxHP);
   if (savedAt) $('#save-status').textContent = performance.now() - savedAt < 1850 ? 'Journey saved' : 'Autosave active';
-  const boss = game.enemies.find(enemy => enemy.type === 'boss' && enemy.hp > 0 && enemy.active);
+  const boss = game.enemies.find(enemy => ['boss', 'oathbreaker'].includes(enemy.type) && enemy.hp > 0 && enemy.active);
   $('#boss-bar').hidden = !boss;
   if (boss) {
+    $('#boss-name').textContent = boss.name;
+    $('#boss-hp').setAttribute('aria-label', `${boss.name} health`);
     $('#boss-hp').max = boss.maxHP;
     $('#boss-hp').value = boss.hp;
-    $('#boss-phase').textContent = ['','I','II','III'][boss.phase];
+    $('#boss-phase').textContent = boss.type === 'boss' ? ['', 'I', 'II', 'III'][boss.phase] : '';
   }
   const nearby = closestMarker(1.7);
   $('#interact-hint').hidden = !nearby || modal.open;
@@ -223,6 +258,9 @@ function itemStats(item) {
     item.damage ? `+${item.damage} attack` : '',
     item.health ? `+${item.health} life` : '',
     item.defense ? `+${item.defense} armor` : '',
+    item.crit ? `+${item.crit}% critical chance` : '',
+    item.barrier ? `+${item.barrier} guard armor` : '',
+    item.recovery ? `+${item.recovery.toFixed(1)} spirit/sec` : '',
   ].filter(Boolean).join(' · ');
 }
 
@@ -236,13 +274,25 @@ function button(label, action, style = 'secondary', disabled = false) {
 
 const controls = [
   ['Move', '<kbd>Click ground</kbd> or <kbd>WASD</kbd> / <kbd>↑ ↓ ← →</kbd>'],
-  ['Attack', '<kbd>Click an enemy</kbd> or <kbd>F</kbd> to attack toward the cursor'],
+  ['Attack', '<kbd>Click an enemy</kbd> to engage. <kbd>Shift + click</kbd> or <kbd>F</kbd> attacks in place.'],
   ['Class skill', '<kbd>Q</kbd> or <kbd>Right click</kbd>'],
+  ['Tactical skill', '<kbd>X</kbd> uses your class’s defensive or control skill'],
+  ['Camera', '<kbd>Mouse wheel</kbd> zooms in or out'],
   ['Dodge', '<kbd>Space</kbd> toward movement or cursor'],
   ['Heal', '<kbd>R</kbd> uses a draught'],
   ['Interact', '<kbd>E</kbd> near a character or gate, or click them'],
   ['Menus', '<kbd>I</kbd> inventory · <kbd>C</kbd> character · <kbd>J</kbd> journal · <kbd>M</kbd> map · <kbd>Esc</kbd> pause'],
 ];
+
+function contractCard(state, shop = false) {
+  const status = state.contract;
+  const action = status === 0 ? 'Accept commission' : status === 2 ? 'Hand in ledger' : '';
+  return `<section class="contract-card">
+    <h3 class="subheading"><span aria-hidden="true">${status === 3 ? '✓ ' : ''}</span> The missing ledger</h3>
+    <p>${CONTRACT[status]}</p>
+    ${shop && action ? button(action, 'commission', 'secondary') : ''}
+  </section>`;
+}
 
 function renderPanel(focusAction) {
   let name;
@@ -255,6 +305,14 @@ function renderPanel(focusAction) {
         `<button type="button" class="class-card" aria-pressed="${id === selectedClass}" data-action="class:${id}" style="--class-color:${entry.color}">
         <span class="mark" aria-hidden="true">${entry.mark}</span><span class="class-name">${entry.name}</span><span class="role">${entry.role}</span><small>${entry.description}</small></button>`).join('')}</div>
       <div class="dialog-actions">${button('Enter Gloamwatch', 'start', 'primary')}${button('Back', 'close')}</div>`;
+  }
+  if (panel === 'loading') {
+    name = 'Preparing Gloamwatch';
+    body = '<p class="dialog-copy">Loading the 3D world and character animations <span id="loading-progress"></span></p><progress id="loading-meter" aria-label="Game asset loading"></progress>';
+  }
+  if (panel === 'load-error') {
+    name = 'Game files unavailable';
+    body = '<p class="dialog-copy">A 3D asset could not be loaded. Reopen the downloaded game or reload this page and try again.</p>' + button('Back', 'close');
   }
   if (panel === 'graphics') {
     name = '3D graphics unavailable';
@@ -277,7 +335,9 @@ function renderPanel(focusAction) {
     body = `<ol class="panel-list">${QUESTS.slice(0, 5).map(([title, objective, detail], index) =>
       `<li class="${index < state.stage ? 'quest-done' : index === state.stage ? 'current-step' : ''}">
       <strong>${index < state.stage ? '✓ ' : ''}${index <= state.stage ? title : 'Undiscovered'}</strong>
-      ${index <= state.stage ? `<p>${index < state.stage ? 'Complete' : `${objective}. ${detail}`}</p>` : ''}</li>`).join('')}</ol>`;
+      ${index <= state.stage ? `<p>${index < state.stage ? 'Complete' : `${objective}. ${detail}`}</p>` : ''}</li>`).join('')}</ol>${contractCard(state)}
+      <section class="contract-card"><h3 class="subheading">${state.vaultCleared ? '✓ ' : ''}Blackroot Vault</h3>
+      <p>${state.vaultCleared ? 'The Oathbreaker is defeated and the relic claimed.' : 'Look for the vault entrance beyond the Cinderwood courier camp.'}</p></section>`;
   }
   if (panel === 'pack') {
     name = 'Inventory';
@@ -298,12 +358,14 @@ function renderPanel(focusAction) {
         `<div><strong>${value}</strong>${label}</div>`).join('')}</div>
       <h3 class="subheading">Talents</h3><div class="stack">${Object.entries(deck).map(([id, [label, detail]]) =>
         `<div class="list-row"><div><strong>${label} · ${state.traits[id]}</strong><small>${detail}</small></div>${button('Train', `train:${id}`, 'secondary', !state.points)}</div>`).join('')}</div>
-      <h3 class="subheading" style="margin-top:14px">Class skill</h3><p class="dialog-copy">${game.class.art} · ${game.class.cost} spirit. ${game.class.artTip}</p>`;
+      <h3 class="subheading" style="margin-top:14px">Class skill</h3><p class="dialog-copy">${game.class.art} · ${game.class.cost} spirit. ${game.class.artTip}</p>
+      <h3 class="subheading">Tactical skill</h3><p class="dialog-copy">${game.class.utility} · ${game.class.utilityCost} spirit. ${game.class.utilityTip}</p>`;
   }
   if (panel === 'shop') {
     name = 'Smith Oren';
     const tier = state.stage >= 3 ? 2 : 1;
     body = `<p class="dialog-copy">“Hard iron, fresh draughts, and a fair price.” · ${state.gold} scrip</p>
+      ${contractCard(state, true)}
       <div class="columns"><div class="stack"><h3 class="subheading">Buy</h3>
       <div class="list-row"><div><strong>Healing draught</strong><small>${state.draughts} / 9 on belt</small></div>${button('12 ◈', 'buy:draught', 'secondary', state.gold < 12 || state.draughts >= 9)}</div>
       ${SLOTS.map(slot => {
@@ -326,7 +388,7 @@ function renderPanel(focusAction) {
         `<div><strong>${value}</strong>${label}</div>`).join('')}</div>
       <div class="dialog-actions">${button('Keep exploring', 'close', 'primary')}${button('Return to title', 'title')}</div>`;
   }
-  const dismiss = panel === 'death' ? '' : '<button type="button" class="modal-close" aria-label="Close dialog" data-action="close">×</button>';
+  const dismiss = ['death', 'loading'].includes(panel) ? '' : '<button type="button" class="modal-close" aria-label="Close dialog" data-action="close">×</button>';
   modalBody.innerHTML = `<div class="modal-top"><h2 id="dialog-title">${name}</h2>${dismiss}</div>${body}`;
   if (focusAction) {
     Array.from(modalBody.querySelectorAll('[data-action]')).find(node => node.dataset.action === focusAction)?.focus({ preventScroll: true });
@@ -354,6 +416,7 @@ function action(value) {
     sell: () => game.sell(Number(param)),
     buy: () => game.buy(param),
     train: () => game.train(param),
+    commission: () => game.commission(),
   };
   inventoryActions[type]?.();
   renderPanel(value);
@@ -374,6 +437,7 @@ function perform(type) {
   audio.start();
   const target = aim();
   if (type === 'art') game.art(target);
+  if (type === 'utility') game.utility(target);
   if (type === 'dodge') {
     const vec = movement();
     game.dodge(vec ? { x: game.player.x + vec.x * 3, y: game.player.y + vec.y * 3 } : target);
@@ -407,10 +471,10 @@ $('#continue').addEventListener('click', () => save && start(save.classId, save)
 $('#title-help').addEventListener('click', () => openPanel('help'));
 $('#toggle-map').setAttribute('aria-expanded', String(mapVisible));
 $('#toggle-map').addEventListener('click', toggleMap);
-for (const id of ['primary', 'art', 'dodge', 'heal']) $('#' + id).addEventListener('click', () => perform(id));
+for (const id of ['primary', 'art', 'utility', 'dodge', 'heal']) $('#' + id).addEventListener('click', () => perform(id));
 modal.addEventListener('cancel', event => {
   event.preventDefault();
-  if (panel !== 'death') closePanel();
+  if (!['death', 'loading'].includes(panel)) closePanel();
 });
 
 canvas.addEventListener('pointermove', event => {
@@ -425,11 +489,17 @@ canvas.addEventListener('pointerdown', event => {
   Object.assign(mouse, { x, y, active: true });
   if (event.button === 2) return perform('art');
   if (event.button !== 0) return;
+  if (event.shiftKey) return perform('primary');
   const entity = renderer.pick(game, x, y);
   if (entity?.kind) game.move(entity, null, entity);
   else if (entity) game.move(entity, entity);
   else game.move(renderer.unproject(x, y));
 });
+canvas.addEventListener('wheel', event => {
+  if (!game || modal.open) return;
+  event.preventDefault();
+  renderer.zoomBy(Math.sign(event.deltaY));
+}, { passive: false });
 canvas.addEventListener('contextmenu', event => event.preventDefault());
 
 window.addEventListener('keydown', event => {
@@ -444,7 +514,7 @@ window.addEventListener('keydown', event => {
   keys.add(key);
   if (event.repeat) return;
   const panels = { escape: 'pause', j: 'journal', i: 'pack', c: 'character' };
-  const skills = { q: 'art', r: 'heal', f: 'primary', ' ': 'dodge' };
+  const skills = { q: 'art', x: 'utility', r: 'heal', f: 'primary', ' ': 'dodge' };
   if (panels[key]) {
     event.preventDefault();
     openPanel(panels[key]);
@@ -473,7 +543,7 @@ document.addEventListener('visibilitychange', () => {
 
 let hudAt = 0;
 function frame(now) {
-  const dt = Math.min(0.24, (now - previousFrame) / 1000 || 0);
+  const dt = Math.min(0.36, (now - previousFrame) / 1000 || 0);
   previousFrame = now;
   if (game) {
     const vector = movement();

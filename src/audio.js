@@ -1,3 +1,5 @@
+import { sourceAudio } from './assets.js';
+
 const NOTES = {
   attack: [[136, 72, 0.13, 'triangle', 0.14]],
   art: [[132, 55, 0.3, 'sawtooth', 0.10], [470, 205, 0.17, 'triangle', 0.11]],
@@ -14,6 +16,10 @@ const NOTES = {
 export class Audio {
   constructor(storage) {
     this.storage = storage;
+    this.buffers = new Map();
+    this.zone = 'title';
+    this.track = null;
+    this.currentSource = null;
     try { this.enabled = storage.getItem('ash-and-iron.audio') !== 'off'; }
     catch { this.enabled = true; }
   }
@@ -36,7 +42,7 @@ export class Audio {
         wave.connect(this.drone);
         wave.start();
       }
-      this.ambience('title');
+      this.ambience(this.zone);
     }
     this.ctx.resume().catch(() => {});
   }
@@ -48,15 +54,69 @@ export class Audio {
     if (this.master) this.master.gain.setTargetAtTime(this.enabled ? 0.37 : 0, this.ctx.currentTime, 0.06);
   }
 
+  decode(name) {
+    if (!this.buffers.has(name)) {
+      const bytes = sourceAudio(name);
+      if (!bytes) return null;
+      this.buffers.set(name, this.ctx.decodeAudioData(bytes.slice(0)).catch(() => null));
+    }
+    return this.buffers.get(name);
+  }
+
   ambience(zone) {
+    this.zone = zone;
     if (!this.drone) return;
-    const levels = { title: 0.017, watch: 0.019, wood: 0.029, crypt: 0.042, belfry: 0.052 };
+    const levels = { title: 0.017, watch: 0.013, wood: 0.020, crypt: 0.019, vault: 0.022, belfry: 0.035 };
     this.drone.gain.setTargetAtTime(levels[zone], this.ctx.currentTime, 0.5);
+    const track = ['watch', 'wood'].includes(zone) ? 'whispers' : ['crypt', 'vault', 'belfry'].includes(zone) ? 'dungeon-loop' : null;
+    if (track === this.track) return;
+    this.track = track;
+    const previous = this.currentSource;
+    this.currentSource = null;
+    if (previous) {
+      previous.gain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.34);
+      previous.source.stop(this.ctx.currentTime + 1.6);
+    }
+    if (!track) return;
+    this.decode(track)?.then(buffer => {
+      if (!buffer || this.track !== track || this.currentSource) return;
+      const source = this.ctx.createBufferSource();
+      const gain = this.ctx.createGain();
+      source.buffer = buffer;
+      source.loop = true;
+      gain.gain.value = 0;
+      source.connect(gain);
+      gain.connect(this.master);
+      source.start();
+      gain.gain.setTargetAtTime(track === 'whispers' ? 0.22 : 0.27, this.ctx.currentTime, 0.65);
+      this.currentSource = { source, gain };
+    });
+  }
+
+  sample(name, level) {
+    const decoded = this.decode(name);
+    if (!decoded) return false;
+    decoded.then(buffer => {
+      if (!buffer || !this.enabled) return;
+      const source = this.ctx.createBufferSource();
+      const gain = this.ctx.createGain();
+      gain.gain.value = level;
+      source.buffer = buffer;
+      source.playbackRate.value = 0.90 + Math.random() * 0.21;
+      source.connect(gain);
+      gain.connect(this.master);
+      source.start();
+    });
+    return true;
   }
 
   play(name) {
     if (!this.enabled || !this.ctx) return;
-    for (const [base, end, duration, type, volume] of NOTES[name] ?? []) {
+    if (name === 'steel' || name === 'hit') {
+      const sample = `${name === 'steel' ? 'swing' : 'clash'}-${Math.random() < 0.5 ? 'a' : 'b'}`;
+      if (this.sample(sample, name === 'steel' ? 0.29 : 0.17)) return;
+    }
+    for (const [base, end, duration, type, volume] of NOTES[name === 'steel' ? 'attack' : name] ?? []) {
       const now = this.ctx.currentTime;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();

@@ -40,4 +40,4 @@ jobs:
           gh release create "$GITHUB_REF_NAME" dist/Ash-and-Iron.html \
             --verify-tag \
             --title "Ash & Iron $GITHUB_REF_NAME — The Hollow Bell" \
-            --notes "Download **Ash-and-Iron.html** and open it in a desktop browser with WebGL 2. It runs offline and saves your progress in the browser. This release includes all of Act I."
+            --notes "Download **Ash-and-Iron.html** and open it in a desktop browser with WebGL 2. It runs offline and saves your progress in the browser. This release includes all of Act I and the optional Blackroot Vault dungeon."
