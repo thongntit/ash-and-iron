@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#121412">
+  <meta name="description" content="Ash & Iron is an original single-player isometric action RPG. Explore Gloamwatch and silence the Bellworn in Act I.">
+  <title>Ash &amp; Iron — The Hollow Bell</title>
+  <link rel="icon" href="./art/brand.png">
+  <script type="module" src="/src/main.js"></script>
+</head>
+<body>
+  <main id="title-screen" class="title-screen">
+    <header class="title-header">
+      <a class="brand" href="#game-title" aria-label="Ash and Iron home"><span class="sigil" aria-hidden="true">✦</span><span>ASH &amp; IRON</span></a>
+      <button class="text-button sound-button" data-audio type="button"><span aria-hidden="true">◖))</span> Sound on</button>
+    </header>
+    <section class="title-content" aria-labelledby="game-title">
+      <div class="eyebrow"><span></span> ACT I <b>◆</b> GLOAMWATCH</div>
+      <h1 id="game-title">Ash <em>&amp;</em> Iron</h1>
+      <p class="subtitle">The Hollow Bell</p>
+      <p class="intro">The bell beneath Gloamwatch has rung for the first time in a century. Follow the cinder road, recover the lost seals, and silence it before the dead reach the gates.</p>
+      <div class="title-actions">
+        <button id="continue" class="primary" type="button" hidden>Continue journey <span aria-hidden="true">→</span></button>
+        <button id="new-game" class="primary" type="button">Begin journey <span aria-hidden="true">→</span></button>
+        <button id="title-help" class="secondary" type="button">How to play</button>
+      </div>
+      <p id="save-label" class="save-label" hidden></p>
+    </section>
+    <footer class="title-footer">
+      <span>ISOMETRIC ACTION RPG <b>◆</b> SINGLE PLAYER</span>
+      <span>ACT I <b>◆</b> v1.0</span>
+    </footer>
+  </main>
+  <main id="game-screen" class="game-screen" hidden>
+    <canvas id="world" aria-label="Isometric game world" tabindex="0"></canvas>
+    <header class="game-header">
+      <div class="zone-box"><span class="sigil" aria-hidden="true">✦</span><div><p>ACT I · THE HOLLOW BELL</p><h1 id="zone-title">Gloamwatch</h1></div></div>
+      <div class="top-tools" aria-label="Game menus">
+        <button type="button" class="chip" data-panel="journal"><span>Journal</span> <kbd>J</kbd></button>
+        <button type="button" class="chip" data-panel="pack"><span>Inventory</span> <kbd>I</kbd></button>
+        <button type="button" class="chip" data-panel="character"><span>Character</span> <kbd>C</kbd></button>
+        <button type="button" class="chip" data-panel="pause" aria-label="Pause menu">☰</button>
+      </div>
+    </header>
+    <aside class="tracker" aria-label="Current quest">
+      <div class="eyebrow"><b>◆</b> CURRENT QUEST</div>
+      <h2 id="quest-title"></h2><p id="quest-objective"></p>
+    </aside>
+    <aside id="map-box" class="map-box" aria-label="Area map">
+      <canvas id="map" width="180" height="180"></canvas>
+      <button id="toggle-map" class="text-button map-toggle" type="button" aria-label="Toggle area map"><kbd>M</kbd> Map</button>
+    </aside>
+    <div id="boss-bar" class="boss-bar" hidden><div>The Bellworn <span id="boss-phase"></span></div><progress id="boss-hp" value="100" max="100" aria-label="The Bellworn health"></progress></div>
+    <div id="zone-banner" class="zone-banner" aria-hidden="true"><div>◆</div><h2></h2><p></p></div>
+    <div id="notifications" class="notifications" aria-live="polite"></div>
+    <div id="interact-hint" class="interact-hint" hidden><kbd>E</kbd> <span></span></div>
+    <footer class="hud">
+      <div class="hud-body">
+        <div class="vital" id="health-panel"><div class="orb health"><span id="health-fill"></span><b id="health-value"></b></div><span>Life</span></div>
+        <div class="skill-group">
+          <div class="level-line"><span id="level-label"></span><span id="xp-label"></span></div>
+          <progress id="xp" value="0" max="100" aria-label="Experience progress"></progress>
+          <div class="skills">
+            <button id="primary" type="button" class="skill" aria-label="Primary attack"><span class="skill-icon"></span><kbd>LMB</kbd></button>
+            <button id="art" type="button" class="skill" aria-label="Class skill"><span class="skill-icon">✹</span><kbd>Q</kbd></button>
+            <button id="dodge" type="button" class="skill" aria-label="Dodge"><span class="skill-icon">↝</span><kbd>SPACE</kbd></button>
+            <button id="heal" type="button" class="skill" aria-label="Use healing draught"><span class="skill-icon">✚</span><b id="draught-count"></b><kbd>R</kbd></button>
+          </div>
+        </div>
+        <div class="vital"><div class="orb spirit"><span id="spirit-fill"></span><b id="spirit-value"></b></div><span>Spirit</span></div>
+      </div>
+      <div class="hud-caption"><span id="scrip">◈ 20 scrip</span><span id="save-status">Autosave ready</span></div>
+    </footer>
+  </main>
+  <dialog id="modal" aria-labelledby="dialog-title"><div id="modal-body"></div></dialog>
+</body>
+</html>
