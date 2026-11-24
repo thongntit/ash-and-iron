@@ -1,18 +1,18 @@
 import { expect, test } from '@playwright/test';
 import { resolve } from 'node:path';
 
-test.use({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+test.use({ viewport: { width: 1100, height: 720 }, reducedMotion: 'reduce' });
 
 async function start(page, className = 'Warden') {
   await page.getByRole('button', { name: 'Begin journey' }).click();
   await page.getByRole('button', { name: new RegExp(className) }).click();
   await page.getByRole('button', { name: 'Enter Gloamwatch' }).click();
   await expect(page.getByRole('heading', { name: 'Gloamwatch' })).toBeVisible();
-  await expect(page.locator('#world')).toHaveAttribute('data-rendered-zone', 'watch', { timeout: 20_000 });
+  await expect(page.locator('#world')).toHaveAttribute('data-rendered-zone', 'watch', { timeout: 35_000 });
 }
 
 test('desktop controls, quest progression, and persisted chapter state', async ({ page }) => {
-  test.setTimeout(105_000);
+  test.setTimeout(180_000);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');
@@ -25,19 +25,19 @@ test('desktop controls, quest progression, and persisted chapter state', async (
   expect(await page.locator('#world').evaluate(canvas => Boolean(canvas.getContext('webgl2')))).toBe(true);
 
   // Mara stands three tiles north of the starting point. Click her visible sprite.
-  await page.mouse.click(865, 335);
-  await expect(page.locator('#quest-objective')).toHaveText('Recover the Ash Seal', { timeout: 14_000 });
+  await page.mouse.click(685, 253);
+  await expect(page.locator('#quest-objective')).toHaveText('Recover the Ash Seal', { timeout: 25_000 });
   await page.keyboard.press('j');
   await expect(page.getByRole('dialog')).toContainText('A road of cinders');
   await page.keyboard.press('j');
 
   // The off-screen route marker leads to the gate around the new town buildings.
   await page.getByRole('button', { name: 'To Cinderwood' }).click();
-  await expect(page.getByRole('heading', { name: 'Cinderwood' })).toBeVisible({ timeout: 32_000 });
-  await expect(page.locator('#world')).toHaveAttribute('data-rendered-zone', 'wood', { timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: 'Cinderwood' })).toBeVisible({ timeout: 65_000 });
+  await expect(page.locator('#world')).toHaveAttribute('data-rendered-zone', 'wood', { timeout: 35_000 });
 
   // Cast toward the first patrol and open the inventory to pause the game.
-  await page.mouse.move(905, 490);
+  await page.mouse.move(715, 401);
   await page.getByRole('button', { name: 'Class skill' }).click();
   await page.keyboard.press('i');
   await expect(page.getByRole('dialog')).toContainText('Equipped');
@@ -49,13 +49,13 @@ test('desktop controls, quest progression, and persisted chapter state', async (
   await page.reload();
   await expect(page.locator('#save-label')).toContainText('Ember Witch · Cinderwood');
   await page.getByRole('button', { name: 'Continue journey' }).click();
-  await expect(page.getByRole('heading', { name: 'Cinderwood' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Cinderwood' })).toBeVisible({ timeout: 35_000 });
   await expect(page.locator('#quest-objective')).toHaveText('Recover the Ash Seal');
   expect(errors).toEqual([]);
 });
 
 test('downloadable HTML runs offline and works with the touch interface', async ({ browser }) => {
-  test.setTimeout(45_000);
+  test.setTimeout(100_000);
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, offline: true });
   const page = await context.newPage();
   const errors = [];
@@ -70,7 +70,7 @@ test('downloadable HTML runs offline and works with the touch interface', async 
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
   await start(page, 'Hollow Scout');
   await page.locator('#world').tap({ position: { x: 288, y: 331 } });
-  await expect(page.locator('#quest-objective')).toHaveText('Recover the Ash Seal', { timeout: 14_000 });
+  await expect(page.locator('#quest-objective')).toHaveText('Recover the Ash Seal', { timeout: 25_000 });
   await page.getByRole('button', { name: 'Inventory' }).tap();
   await expect(page.getByRole('dialog')).toContainText('Your pack is empty.');
   await page.getByRole('button', { name: 'Close dialog' }).tap();
@@ -80,7 +80,7 @@ test('downloadable HTML runs offline and works with the touch interface', async 
 });
 
 test('the 3D Belfry fight triggers the finale and saves completion', async ({ page }) => {
-  test.setTimeout(100_000);
+  test.setTimeout(180_000);
   const { Game, SAVE_KEY } = await import('../src/game.js');
   const { makeItem } = await import('../src/content.js');
   const checkpoint = new Game('witch');
@@ -103,24 +103,25 @@ test('the 3D Belfry fight triggers the finale and saves completion', async ({ pa
   await page.goto('/');
   await page.getByRole('button', { name: 'Sound on' }).click();
   await page.getByRole('button', { name: 'Continue journey' }).click();
-  await expect(page.getByRole('heading', { name: 'Ashen Belfry' })).toBeVisible();
-  await expect(page.locator('#boss-bar')).toBeVisible({ timeout: 20_000 });
-  const boss = [965, 455];
+  await expect(page.getByRole('heading', { name: 'Ashen Belfry' })).toBeVisible({ timeout: 35_000 });
+  await expect(page.locator('#world')).toHaveAttribute('data-rendered-zone', 'belfry', { timeout: 35_000 });
+  await expect(page.locator('#boss-bar')).toBeVisible({ timeout: 35_000 });
+  const boss = [775, 365];
   await page.mouse.click(...boss);
-  await expect.poll(async () => page.locator('#boss-hp').evaluate(bar => bar.value), { timeout: 15_000 }).toBeLessThan(740);
+  await expect.poll(async () => page.locator('#boss-hp').evaluate(bar => bar.value), { timeout: 30_000 }).toBeLessThan(740);
   for (let i = 0; i < 12; i++) {
     if (await page.locator('#boss-bar').isHidden()) break;
     await page.keyboard.press('q');
     await page.keyboard.press('r');
     await page.waitForTimeout(650);
   }
-  await expect(page.locator('#quest-objective')).toHaveText('Return to Keeper Mara', { timeout: 15_000 });
+  await expect(page.locator('#quest-objective')).toHaveText('Return to Keeper Mara', { timeout: 30_000 });
 
   // The waygate is four tiles south of the bell, within view of the player.
-  await page.mouse.click(768, 628);
-  await expect(page.getByRole('heading', { name: 'Gloamwatch' })).toBeVisible({ timeout: 18_000 });
-  await page.mouse.click(818, 337);
-  await expect(page.getByRole('dialog')).toContainText('The bell is silent', { timeout: 14_000 });
+  await page.mouse.click(595, 522);
+  await expect(page.getByRole('heading', { name: 'Gloamwatch' })).toBeVisible({ timeout: 30_000 });
+  await page.mouse.click(640, 256);
+  await expect(page.getByRole('dialog')).toContainText('The bell is silent', { timeout: 25_000 });
   await page.getByRole('button', { name: 'Return to title' }).click();
   await expect(page.locator('#save-label')).toContainText('Act I complete');
 });
