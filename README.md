@@ -52,7 +52,7 @@ The game uses Three.js with an orthographic camera, skeletal animation, dynamic 
 
 - Adventurers, skeletons, dungeon pieces, and medieval buildings by Kay Lousberg. [KayKit](https://github.com/KayKit-Game-Assets)
 - Trees and foliage by Quaternius. [Ultimate Stylized Nature](https://quaternius.com/packs/ultimatestylizednature.html)
-- Cobblestone and forest floor by Rob Tuytel. [Cobblestone Floor 04](https://polyhaven.com/a/cobblestone_floor_04) · [Forest Floor](https://polyhaven.com/a/forest_floor)
+- Cobblestone by Rob Tuytel and forest floor by eye-candy.xyz. [Cobblestone Floor 04](https://polyhaven.com/a/cobblestone_floor_04) · [Forest Floor](https://polyhaven.com/a/forest_floor)
 - Ambience and sword effects by Ruhinre, yd, and StarNinjas. [Asset sources and licenses](public/licenses/asset-sources.txt)
 
 These game assets are CC0. The title illustration was generated for Ash & Iron. The fonts retain their SIL Open Font Licenses. [License files](public/licenses) · [Font notices](public/fonts)
